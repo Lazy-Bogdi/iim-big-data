@@ -11,7 +11,14 @@ import os
 # Ajouter le chemin pour les imports
 sys.path.append(os.path.dirname(__file__))
 
-from utils.data_loader import load_all_kpis, load_all_facts, load_all_analytics
+from utils.data_loader import (
+    load_all_kpis,
+    load_all_facts,
+    load_all_analytics,
+    load_all_kpis_api,
+    load_all_facts_api,
+    load_all_analytics_api,
+)
 
 # Configuration de la page
 st.set_page_config(
@@ -42,12 +49,18 @@ st.markdown("""
 
 
 @st.cache_data(ttl=300)  # Cache pour 5 minutes
-def load_data():
-    """Charge toutes les données avec cache"""
-    with st.spinner("Chargement des données depuis Gold..."):
-        kpis = load_all_kpis()
-        facts = load_all_facts()
-        analytics = load_all_analytics()
+def load_data(source: str):
+    """Charge toutes les données avec cache, soit depuis MinIO, soit via l'API MongoDB."""
+    if source == "MinIO (direct)":
+        with st.spinner("Chargement des données depuis Gold (MinIO)..."):
+            kpis = load_all_kpis()
+            facts = load_all_facts()
+            analytics = load_all_analytics()
+    else:
+        with st.spinner("Chargement des données via l'API (MongoDB)..."):
+            kpis = load_all_kpis_api()
+            facts = load_all_facts_api()
+            analytics = load_all_analytics_api()
     return kpis, facts, analytics
 
 
@@ -59,6 +72,13 @@ def main():
     
     # Sidebar pour navigation
     st.sidebar.title("📑 Navigation")
+
+    source = st.sidebar.radio(
+        "Source des données",
+        ["MinIO (direct)", "API Mongo"],
+        index=0,
+    )
+
     page = st.sidebar.selectbox(
         "Choisir une page",
         [
@@ -75,7 +95,7 @@ def main():
     )
     
     # Charger les données
-    kpis, facts, analytics = load_data()
+    kpis, facts, analytics = load_data(source)
     
     # Router vers la bonne page
     if page == "🏠 Accueil - KPIs Globaux":

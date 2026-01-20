@@ -7,3 +7,5 @@ streamlit
 plotly
 python-dotenv
 scikit-learn
+pymongo
+requests
