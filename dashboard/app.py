@@ -94,6 +94,19 @@ def main():
         ]
     )
     
+    # Comparaison des temps dans la sidebar
+    st.sidebar.divider()
+    st.sidebar.subheader("⏱ Comparaison des temps")
+    if st.sidebar.button("Mesurer MinIO vs API"):
+        from utils.data_loader import benchmark_sources
+        with st.sidebar.spinner("Mesure en cours..."):
+            times = benchmark_sources()
+        st.sidebar.metric("MinIO direct", f"{times['minio_total']:.3f} s")
+        st.sidebar.metric("API Mongo", f"{times['api_total']:.3f} s")
+        if times['api_total'] > 0:
+            ratio = times['api_total'] / times['minio_total']
+            st.sidebar.caption(f"API est {ratio:.2f}x {'plus lente' if ratio > 1 else 'plus rapide'} que MinIO")
+    
     # Charger les données
     kpis, facts, analytics = load_data(source)
     

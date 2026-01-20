@@ -1,322 +1,247 @@
-## Projet Big Data – Pipeline ELT, Analytics & Temps Réel
+# Projet Big Data – Pipeline ELT, Analytics & NoSQL
 
-Ce projet met en place une **pipeline de données complète** autour d’un cas e‑commerce (clients, achats) avec :
-- une architecture **Bronze / Silver / Gold**,
-- de l’orchestration avec **Prefect**,
-- du stockage objet avec **MinIO**,
-- un **dashboard Streamlit** pour la visualisation,
-- et (à implémenter étape par étape) : **Spark**, **MongoDB**, **API FastAPI/Flask** et **Kafka + Spark Streaming**.
+Pipeline de données complète pour un cas e-commerce avec architecture **Bronze / Silver / Gold**, orchestration **Prefect**, stockage **MinIO**, **MongoDB**, **API FastAPI** et **dashboard Streamlit**.
 
 ---
 
-## 1. Objectifs pédagogiques (consignes du projet)
+## 🚀 Setup du projet (après git clone/pull)
 
-### 1.1 Amélioration de la pipeline
-- Rendre la pipeline plus **robuste** à l’ingestion de nouvelles données.
-- Mettre en place du **machine learning** pour extraire plus d’informations (choix du modèle libre).
+### 1. Prérequis
 
-### 1.2 Big Data authentique avec Spark
-- Remplacer **pandas** par **PySpark** dans la pipeline ELT existante.
-- Ajouter un **cluster Spark** (1 master + 2 workers via Docker Compose).
-- Convertir les transformations Pandas en transformations **Spark**.
-- Comparer les **temps de traitement** Pandas vs Spark.
+- **Python 3.12**
+- **Docker** + **docker-compose**
+- **Git**
 
-### 1.3 Base NoSQL opérationnelle avec MongoDB
-- Pipeline qui **lit la couche Gold** (Parquet) et écrit dans **MongoDB**.
-- **API Flask/FastAPI** qui expose les données MongoDB.
-- Dashboard **Streamlit** qui interroge l’API.
-- Calculer le **temps de refresh** entre la mise à jour MongoDB et la mise à jour du dashboard.
-- Bonus : mise en place de **Metabase** pour un dashboard BI.
-
-### 1.4 Streaming temps réel avec Kafka + Spark Streaming
-- Producteur **Kafka** qui simule des événements e‑commerce (clics, achats, paniers abandonnés…).
-- **Spark Streaming** qui consomme Kafka, applique des transformations et détecte des anomalies.
-
----
-
-## 2. Architecture globale du projet
-
-### 2.1 Arborescence principale
-
-```text
-big-data/
-├── api/                    # (À implémenter) API Flask/FastAPI exposant MongoDB
-├── dashboard/              # Dashboard Streamlit (couche Gold)
-├── data/
-│   └── sources/            # Données brutes CSV générées
-├── flows/
-│   ├── bronze_ingestion.py # Ingestion vers MinIO (sources -> bronze)
-│   ├── silver_transformation.py # Nettoyage / normalisation (bronze -> silver)
-│   ├── gold_aggregation.py # Agrégations métier & KPIs (silver -> gold)
-│   ├── config.py           # Config MinIO / Prefect / buckets
-│   ├── transformations/    # Fonctions de nettoyage & qualité (Silver)
-│   ├── aggregations/       # Logique d’agrégation (Gold)
-│   ├── spark/              # (À implémenter) Versions PySpark de Silver/Gold
-│   └── streaming/          # (À implémenter) Kafka producer & Spark Streaming
-├── mongo_pipeline/         # (À implémenter) Écriture Gold -> MongoDB
-├── scripts/
-│   └── generate_data.py    # Génération des CSV de test (clients, achats)
-├── services/               # (À implémenter) Docker Compose dédiés Spark/Mongo/Kafka
-├── docker-compose.yml      # MinIO + Prefect + Postgres (orchestration)
-├── requirements.txt        # Dépendances Python
-├── consignes.txt           # Consignes du projet (copie du sujet)
-└── README.MD               # (ce fichier)
-```
-
-### 2.2 Stack technique
-
-- **Python** 3.12
-- **Prefect** : orchestration des flows
-- **MinIO** : data lake S3‑compatible (buckets `sources`, `bronze`, `silver`, `gold`)
-- **Pandas / PyArrow** : traitement batch (actuel, Silver & Gold)
-- **Streamlit** : dashboard interactif (`dashboard/app.py`) – cf. [docs Streamlit](https://streamlit.io/)
-- **Docker Compose** : MinIO, Prefect Server, Postgres
-- (À venir) **PySpark**, **MongoDB**, **FastAPI/Flask**, **Kafka**, **Spark Streaming**
-
----
-
-## 3. Pipeline ELT actuelle (Bronze / Silver / Gold)
-
-### 3.1 Génération des données de test
-
-Script : `scripts/generate_data.py`
-- Génère :
-  - `data/sources/clients.csv`
-  - `data/sources/achats.csv`
-- Colonnes principales :
-  - **clients** : `id_client`, `nom`, `email`, `date_inscription`, `pays`
-  - **achats** : `id_achat`, `id_client`, `date_achat`, `montant`, `produit`
-
-Commande :
+### 2. Installation
 
 ```bash
-python scripts/generate_data.py
-```
-
-### 3.2 Couche Bronze – Ingestion MinIO
-
-Flow : `flows/bronze_ingestion.py`
-- Upload des CSV locaux (`data/sources/*.csv`) vers le bucket MinIO `sources`.
-- Copie des fichiers du bucket `sources` vers le bucket `bronze`.
-- Orchestration Prefect avec tâches `upload_to_sources` et `copy_to_bronze_layer`.
-
-Commande :
-
-```bash
-docker-compose up -d          # démarre MinIO, Prefect, Postgres
-python flows/bronze_ingestion.py
-```
-
-Résultat :
-- `sources/clients.csv`, `sources/achats.csv` dans MinIO.
-- `bronze/clients.csv`, `bronze/achats.csv` dans MinIO.
-
-### 3.3 Couche Silver – Nettoyage & normalisation
-
-Flow : `flows/silver_transformation.py`
-- Lecture des CSV depuis `bronze/`.
-- Nettoyage & normalisation avec `flows/transformations/` :
-  - Gestion des valeurs manquantes / aberrantes.
-  - Standardisation des dates.
-  - Normalisation des types.
-  - Déduplication.
-  - Contrôles de qualité (complétude, unicité, validité) + rapport.
-- Écriture en Parquet vers le bucket `silver/` :
-  - `silver/clients.parquet`
-  - `silver/achats.parquet`
-
-Commande :
-
-```bash
-python flows/silver_transformation.py
-```
-
-### 3.4 Couche Gold – Agrégations & KPIs
-
-Flow : `flows/gold_aggregation.py`
-- Lecture de `silver/clients.parquet` et `silver/achats.parquet`.
-- Construction :
-  - **Dimensions** : `dim_clients`, `dim_produits`, `dim_temps`, `dim_rfm`.
-  - **Faits** : `fact_achats`, `fact_ca_jour`, `fact_ca_semaine`, `fact_ca_mois`, `fact_ca_heure`, `fact_ca_pays`.
-  - **KPIs** : CLV, rétention, RFM, performance produits, croissance, etc.
-  - **Analyses** : saisonnalité, concentration (Pareto / Gini), cohortes.
-- Écriture en Parquet vers le bucket `gold/` dans les sous‑dossiers :
-  - `gold/dimensions/`, `gold/facts/`, `gold/kpis/`, `gold/analytics/`.
-
-Commande :
-
-```bash
-python flows/gold_aggregation.py
-```
-
----
-
-## 4. Dashboard Streamlit (couche Gold)
-
-App : `dashboard/app.py` (+ utilitaires dans `dashboard/utils/data_loader.py`)
-
-- Charge les Parquet de la couche Gold directement depuis MinIO (bucket `gold`).
-- Pages disponibles :
-  - **Accueil – KPIs globaux**.
-  - **Évolution temporelle** (jour/semaine/mois/heure).
-  - **Analyse géographique** (CA par pays).
-  - **Segmentation RFM**.
-  - **Customer Lifetime Value (CLV)**.
-  - **Rétention & churn**.
-  - **Performance produits**.
-  - **Saisonnalité**.
-  - **Analyses avancées** (concentration, cohortes, etc.).
-
-Lancement :
-
-```bash
-streamlit run dashboard/app.py
-```
-
-Dashboard disponible sur : `http://localhost:8501`
-
----
-
-## 5. Organisation du code & bonnes pratiques Git
-
-### 5.1 Ce qui est versionné
-
-- Code Python (`flows/`, `dashboard/`, `scripts/`, `api/`, `mongo_pipeline/`…).
-- Fichiers de config : `docker-compose.yml`, `requirements.txt`, `README.MD`, `consignes.txt`.
-- Structure des dossiers de données (via éventuels `.gitkeep` si besoin).
-
-### 5.2 Ce qui n’est **pas** versionné (voir `.gitignore`)
-
-- **Environnements & artefacts Python** :
-  - `.venv/`, `__pycache__/`, `*.pyc`, etc.
-- **Secrets & config locale** :
-  - `.env`, `.env.local`, `.streamlit/secrets.toml`.
-- **Données** :
-  - `data/sources/*.csv`, `data/database/`, `data/raw/`, `data/processed/`.
-  - `*.parquet`, `*.csv` globaux (sauf éventuels `.gitkeep`).
-- **Systèmes & services** :
-  - Volumes MinIO, Spark, MongoDB, Kafka (`minio_data/`, `spark-warehouse/`, `mongodb_data/`, `kafka_data/`…).
-- **Caches & logs** :
-  - `.pytest_cache/`, `.coverage`, `*.log`, etc.
-
-Cela garantit un **repo propre**, sans données lourdes ni secrets.
-
----
-
-## 6. Roadmap par rapport aux consignes
-
-Les dossiers **existent déjà** mais les fichiers sont **encore vides** pour éviter le « code mort » : ils seront remplis étape par étape.
-
-### 6.1 Robustesse & Machine Learning (prochaine étape)
-
-Objectifs :
-- Rendre la pipeline plus **robuste** :
-  - Meilleure gestion des erreurs (ingestion, parsing CSV, schémas évolutifs).
-  - Contrôles de qualité renforcés et centralisés.
-  - Tests unitaires simples sur les fonctions de transformation.
-- Ajouter un **bloc ML** (par exemple) :
-  - Segmentation avancée clients (clustering sur features RFM / CA / fréquence).
-  - Modèle simple de prédiction de churn ou d’upsell.
-
-Implémentation prévue :
-- Nouveau module `ml/` (ou intégration dans `flows/gold_aggregation.py`) qui :
-  - Lit des features depuis la couche Gold.
-  - Entraîne un modèle.
-  - Écrit les scores (ex: `score_churn`, `segment_ml`) dans une nouvelle table Gold.
-
-### 6.2 Base NoSQL avec MongoDB
-
-Répertoire : `mongo_pipeline/`
-- `mongo_writer.py` : pipeline qui lit des Parquet Gold et écrit dans MongoDB.
-
-Répertoire : `api/`
-- `app.py` : API Flask/FastAPI qui expose les données MongoDB.
-- `requirements.txt` : dépendances API.
-
-Répertoire : `services/mongodb/`
-- Fichier à créer : `docker-compose-mongo.yml` (MongoDB + éventuellement Mongo Express).
-
-Étapes prévues :
-1. Lire certaines tables Gold (`fact_achats`, `dim_clients`…).
-2. Les projeter dans des collections Mongo (schémas adaptés à la lecture API).
-3. Exposer des endpoints REST (`/clients`, `/achats`, `/kpis`…).
-4. Ajouter dans le dashboard Streamlit une page qui **interroge l’API** (et non MinIO directement).
-5. Mesurer le **temps de refresh** entre Gold → Mongo → API → Dashboard.
-
-### 6.3 Streaming temps réel (Kafka + Spark Streaming)
-
-Répertoire : `flows/streaming/`
-- `kafka_producer.py` : producteur Kafka simulant des événements e‑commerce.
-- `spark_streaming.py` : job Spark Streaming qui consomme Kafka et détecte des anomalies.
-
-Répertoire : `services/kafka/`
-- Fichier à créer : `docker-compose-kafka.yml` (Kafka + Zookeeper ou stack moderne type Bitnami/Redpanda).
-
-Étapes prévues :
-1. Définir le schéma d’événements (clics, ajout panier, achat, abandon).
-2. Implémenter un producteur Kafka simple.
-3. Implémenter un job Spark Streaming pour :
-   - agrégations temps réel (par exemple nombre d’événements par type/pays),
-   - détection d’anomalies simples (pics de paniers abandonnés, etc.).
-4. Option : exposer ces métriques en temps quasi réel (par ex. via MongoDB ou un autre sink).
-
----
-
-## 7. Comment lancer le projet (état actuel)
-
-### 7.1 Prérequis
-- Python 3.12
-- `docker` + `docker-compose`
-
-### 7.2 Installation Python
-
-```bash
+# Cloner le repo (si pas déjà fait)
+git clone <url-du-repo>
 cd big-data
+
+# Créer l'environnement virtuel
 python3 -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate  # Sur Windows: .venv\Scripts\activate
+
+# Installer les dépendances
 pip install --upgrade pip
 pip install -r requirements.txt
+pip install -r api/requirements.txt
 ```
 
-### 7.3 Démarrer l’infrastructure de base (MinIO + Prefect + Postgres)
+### 3. Démarrer l'infrastructure Docker
 
 ```bash
+# Démarrer MinIO, Prefect, Postgres, MongoDB, Mongo Express
 docker-compose up -d
+
+# Vérifier que tout est démarré
+docker ps
 ```
 
-### 7.4 Exécuter la pipeline ELT
+**Services disponibles :**
+- **MinIO** : `http://localhost:9000` (Console: `http://localhost:9001`, user: `minioadmin` / `minioadmin`)
+- **Prefect UI** : `http://localhost:4200`
+- **MongoDB** : `localhost:27017`
+- **Mongo Express** : `http://localhost:8081` (user: `admin` / `admin`)
+
+### 4. Générer les données de test
 
 ```bash
-# 1. Générer les données
 python scripts/generate_data.py
+```
 
-# 2. Ingestion Bronze
+Cela crée `data/sources/clients.csv` et `data/sources/achats.csv`.
+
+### 5. Exécuter la pipeline ELT complète
+
+```bash
+# 1. Ingestion Bronze (CSV -> MinIO bronze)
 python flows/bronze_ingestion.py
 
-# 3. Transformation Silver
+# 2. Transformation Silver (nettoyage, normalisation)
 python flows/silver_transformation.py
 
-# 4. Agrégations Gold
+# 3. Agrégations Gold (KPIs, dimensions, faits)
 python flows/gold_aggregation.py
 ```
 
-### 7.5 Lancer le dashboard Streamlit
+### 6. Synchroniser Gold → MongoDB
 
 ```bash
+python -m mongo_pipeline.mongo_writer
+```
+
+### 7. Lancer l'API FastAPI
+
+```bash
+# Dans un terminal séparé
+uvicorn api.app:app --reload --port 8000
+```
+
+**API disponible :** `http://localhost:8000`
+- Docs Swagger : `http://localhost:8000/docs`
+- Endpoints : `/kpis/{name}`, `/facts/{name}`, `/analytics/{name}`, `/meta/last-refresh`
+
+### 8. Lancer le dashboard Streamlit
+
+```bash
+# Dans un autre terminal
 streamlit run dashboard/app.py
+```
+
+**Dashboard disponible :** `http://localhost:8501`
+
+Dans la sidebar, tu peux :
+- Choisir la source : **"MinIO (direct)"** ou **"API Mongo"**
+- Mesurer les temps de chargement avec le bouton **"Mesurer MinIO vs API"**
+
+---
+
+## 📋 Ce qui a été implémenté
+
+### ✅ 1. Pipeline ELT robuste (Bronze / Silver / Gold)
+
+**Objectif :** Ingestion, nettoyage et agrégation des données e-commerce.
+
+**Fonctionnalités :**
+- **Bronze** : Ingestion générique (découverte automatique de tous les CSV dans `data/sources/`)
+- **Silver** : Nettoyage intelligent générique + cleaners spécifiques pour `clients`/`achats`
+  - Gestion des valeurs nulles/aberrantes
+  - Standardisation des dates
+  - Normalisation des types
+  - Déduplication
+  - Contrôles de qualité (complétude, unicité, validité)
+- **Gold** : Agrégations métier complètes
+  - Dimensions : `dim_clients`, `dim_produits`, `dim_temps`, `dim_rfm`
+  - Faits : CA par jour/semaine/mois/heure/pays
+  - KPIs : CLV, rétention, churn, RFM, croissance, performance produits
+  - Analytics : saisonnalité, concentration (Pareto/Gini), cohortes
+
+**Fichiers clés :**
+- `flows/bronze_ingestion.py`
+- `flows/silver_transformation.py`
+- `flows/gold_aggregation.py`
+- `flows/transformations/` (nettoyage)
+- `flows/aggregations/` (agrégations)
+
+---
+
+### ✅ 2. Machine Learning pour enrichissement automatique
+
+**Objectif :** Extraire automatiquement plus d'informations sans règles métier explicites.
+
+**Fonctionnalités :**
+- **Feature engineering automatique** : détection de patterns (dates, numériques, catégorielles)
+- **Détection d'anomalies** : Isolation Forest (10% d'anomalies détectées)
+- **Clustering automatique** : K-Means pour segmentation (10 clusters)
+- **Scores prédits** : score composite (0-100) par client/achat
+
+**Fichiers clés :**
+- `flows/ml/feature_engineering.py`
+- `flows/ml/ml_models.py`
+- Intégré dans `flows/gold_aggregation.py`
+
+**Résultat :** Les données Gold sont enrichies avec des colonnes ML (`is_anomaly_ml`, `ml_cluster`, `ml_score`) sans casser les KPIs existants.
+
+---
+
+### ✅ 3. Base NoSQL opérationnelle avec MongoDB
+
+**Objectif :** Pipeline Gold → MongoDB + API + Dashboard avec comparaison des temps.
+
+**Fonctionnalités :**
+- **Pipeline MongoDB** (`mongo_pipeline/mongo_writer.py`) :
+  - Lit tous les Parquet Gold depuis MinIO
+  - Écrit dans des collections Mongo (`kpis_*`, `facts_*`, `analytics_*`)
+  - Mesure et stocke le temps de refresh Gold → Mongo
+- **API FastAPI** (`api/app.py`) :
+  - Endpoints REST : `/kpis/{name}`, `/facts/{name}`, `/analytics/{name}`
+  - Endpoint métadonnées : `/meta/last-refresh`
+- **Dashboard Streamlit** :
+  - **Switch de source** : MinIO direct OU API Mongo (mêmes données)
+  - **Comparaison des temps** : bouton dans la sidebar pour mesurer MinIO vs API
+  - Aucun changement de logique métier, juste deux modes de lecture
+
+**Fichiers clés :**
+- `mongo_pipeline/mongo_writer.py`
+- `api/app.py`
+- `dashboard/utils/data_loader.py` (deux modes : MinIO + API)
+- `dashboard/app.py` (switch dans la sidebar)
+
+**Résultat :** Tu peux comparer directement dans Streamlit les temps de chargement MinIO vs API Mongo pour exactement les mêmes données.
+
+---
+
+### ✅ 4. Dashboard Streamlit complet
+
+**Objectif :** Visualisation interactive de tous les KPIs et analyses.
+
+**Pages disponibles :**
+- 🏠 **Accueil** : KPIs globaux (CA, clients, achats, panier moyen)
+- 📈 **Évolution temporelle** : CA par jour/semaine/mois/heure
+- 🌍 **Analyse géographique** : CA par pays, top 10, distribution
+- 🎯 **Segmentation RFM** : Clients par segment (Champions, Loyal, etc.)
+- 💰 **Customer Lifetime Value** : CLV moyen par pays
+- 🔄 **Rétention & Churn** : Taux de rétention, récurrence, churn
+- 📦 **Performance produits** : Top produits par CA, volume
+- 📅 **Saisonnalité** : Patterns par jour/heure/mois de la semaine
+- 📊 **Analyses avancées** : Concentration (Gini), cohortes
+
+**Fichiers clés :**
+- `dashboard/app.py`
+- `dashboard/utils/data_loader.py`
+
+---
+
+## 🏗️ Architecture technique
+
+### Stack
+
+- **Python 3.12** + **Pandas** + **PyArrow** (traitement batch)
+- **Prefect** (orchestration)
+- **MinIO** (data lake S3-compatible)
+- **MongoDB 7** (base NoSQL opérationnelle)
+- **FastAPI** (API REST)
+- **Streamlit** (dashboard)
+- **scikit-learn** (ML)
+- **Docker Compose** (infrastructure)
+
+### Structure des données
+
+```
+MinIO (data lake)
+├── sources/     # CSV bruts
+├── bronze/      # Données brutes (CSV)
+├── silver/      # Données nettoyées (Parquet)
+└── gold/        # Données agrégées (Parquet)
+    ├── dimensions/
+    ├── facts/
+    ├── kpis/
+    ├── analytics/
+    └── ml/       # Données enrichies ML
+
+MongoDB
+├── kpis_*       # Collections KPIs
+├── facts_*      # Collections faits
+├── analytics_*  # Collections analytics
+└── metadata_refresh  # Métadonnées de refresh
 ```
 
 ---
 
-## 8. Format de rendu (rappel)
+## 📊 Format de rendu
 
-Comme indiqué dans `consignes.txt` :
-1. Envoyer un email à `nathan.vidal@ext.devinci.fr` avec le **lien du repo GitHub** du projet.
+1. Envoyer un email à `nathan.vidal@ext.devinci.fr` avec le **lien du repo GitHub**.
 2. Déposer le projet **zippé** dans le dépôt prévu sur DVL.
 
 ---
 
-Ce README sera mis à jour au fur et à mesure que chaque partie (Spark, MongoDB, Kafka, ML) sera implémentée.  
-L’objectif est de garder **un repo propre**, sans code mort, avec une architecture claire et documentée à chaque étape.
+## 🔮 À venir (non implémenté)
 
+- **Kafka + Spark Streaming** : Streaming temps réel avec détection d'anomalies
+- **Metabase** : Dashboard BI connecté à MongoDB (bonus)
 
+---
+
+Ce README sera mis à jour au fur et à mesure des nouvelles implémentations.

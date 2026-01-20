@@ -3,6 +3,7 @@
 from io import BytesIO
 import os
 import sys
+import time
 from typing import Dict
 
 import pandas as pd
@@ -154,4 +155,31 @@ def load_all_analytics_api() -> dict:
         key: _load_df_from_api(f"/analytics/{api_name}")
         for key, api_name in ANALYTICS_KEYS.items()
     }
+
+
+# === Benchmark des deux sources pour le dashboard ===
+
+def benchmark_sources() -> Dict[str, float]:
+    """
+    Compare les temps de chargement entre MinIO direct et API Mongo.
+
+    Retourne un dict avec:
+        - minio_total: temps (s) pour charger kpis+facts+analytics depuis MinIO
+        - api_total  : temps (s) pour charger kpis+facts+analytics via l'API
+    """
+    results: Dict[str, float] = {}
+
+    t0 = time.perf_counter()
+    _ = load_all_kpis()
+    _ = load_all_facts()
+    _ = load_all_analytics()
+    results["minio_total"] = time.perf_counter() - t0
+
+    t0 = time.perf_counter()
+    _ = load_all_kpis_api()
+    _ = load_all_facts_api()
+    _ = load_all_analytics_api()
+    results["api_total"] = time.perf_counter() - t0
+
+    return results
 
