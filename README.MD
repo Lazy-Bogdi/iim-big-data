@@ -224,21 +224,7 @@ Implémentation prévue :
   - Entraîne un modèle.
   - Écrit les scores (ex: `score_churn`, `segment_ml`) dans une nouvelle table Gold.
 
-### 6.2 Big Data avec Spark (dossiers déjà créés)
-
-Répertoire : `flows/spark/`
-- `silver_spark.py` : version PySpark du flow Silver.
-- `gold_spark.py` : version PySpark du flow Gold.
-
-Répertoire : `services/spark/`
-- Fichier à créer : `docker-compose-spark.yml` (cluster Spark 1 master + 2 workers).
-
-Étapes prévues :
-1. Créer le cluster Spark via Docker Compose.
-2. Reprendre les transformations Pandas (Silver/Gold) et les réécrire en **PySpark DataFrame**.
-3. Mesurer et comparer les **temps de traitement** Pandas vs Spark.
-
-### 6.3 Base NoSQL avec MongoDB
+### 6.2 Base NoSQL avec MongoDB
 
 Répertoire : `mongo_pipeline/`
 - `mongo_writer.py` : pipeline qui lit des Parquet Gold et écrit dans MongoDB.
@@ -257,7 +243,7 @@ Répertoire : `services/mongodb/`
 4. Ajouter dans le dashboard Streamlit une page qui **interroge l’API** (et non MinIO directement).
 5. Mesurer le **temps de refresh** entre Gold → Mongo → API → Dashboard.
 
-### 6.4 Streaming temps réel (Kafka + Spark Streaming)
+### 6.3 Streaming temps réel (Kafka + Spark Streaming)
 
 Répertoire : `flows/streaming/`
 - `kafka_producer.py` : producteur Kafka simulant des événements e‑commerce.
