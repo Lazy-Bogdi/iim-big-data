@@ -230,18 +230,13 @@ MongoDB
 
 ---
 
-## 📊 Format de rendu
 
-1. Envoyer un email à `nathan.vidal@ext.devinci.fr` avec le **lien du repo GitHub**.
-2. Déposer le projet **zippé** dans le dépôt prévu sur DVL.
 
----
-
-## 🔮 À venir (non implémenté)
+## (non implémenté)
 
 - **Kafka + Spark Streaming** : Streaming temps réel avec détection d'anomalies
 - **Metabase** : Dashboard BI connecté à MongoDB (bonus)
 
 ---
 
-Ce README sera mis à jour au fur et à mesure des nouvelles implémentations.
+
