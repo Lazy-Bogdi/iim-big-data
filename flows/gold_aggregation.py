@@ -27,6 +27,7 @@ from aggregations import (
     calculate_global_kpis,
     calculate_growth_metrics,
 )
+from ml import enrich_with_ml
 
 
 @task(name="read_silver_parquet", retries=2)
@@ -115,6 +116,18 @@ def gold_aggregation_flow() -> dict:
     print("\n📖 Lecture des données Silver...")
     clients_df = read_silver_parquet("clients.parquet")
     achats_df = read_silver_parquet("achats.parquet")
+    
+    # ===== ENRICHISSEMENT ML =====
+    print("\n🤖 Enrichissement avec Machine Learning...")
+    if not clients_df.empty:
+        clients_df = enrich_with_ml(clients_df, "clients")
+        # Sauvegarder la version enrichie ML
+        write_parquet_to_gold(clients_df, "ml/clients_enriched_ml.parquet")
+    
+    if not achats_df.empty:
+        achats_df = enrich_with_ml(achats_df, "achats")
+        # Sauvegarder la version enrichie ML
+        write_parquet_to_gold(achats_df, "ml/achats_enriched_ml.parquet")
     
     # ===== DIMENSIONS =====
     print("\n📐 Création des dimensions...")

@@ -7,6 +7,7 @@ from .data_cleaning import (
     remove_duplicates,
     clean_clients_data,
     clean_achats_data,
+    clean_data_generic,
 )
 
 from .quality_checks import (
@@ -22,6 +23,7 @@ __all__ = [
     "remove_duplicates",
     "clean_clients_data",
     "clean_achats_data",
+    "clean_data_generic",
     "validate_data_quality",
     "detect_anomalies",
     "generate_quality_report",

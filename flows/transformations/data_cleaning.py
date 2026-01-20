@@ -250,3 +250,118 @@ def clean_achats_data(df: pd.DataFrame, valid_client_ids: Optional[pd.Series] = 
     
     return df_clean
 
+
+def clean_data_generic(df: pd.DataFrame, dataset_name: str = "dataset") -> pd.DataFrame:
+    """
+    Nettoie génériquement n'importe quel DataFrame sans connaître le schéma.
+    Applique des transformations intelligentes basées sur la détection automatique.
+    
+    Args:
+        df: DataFrame brut à nettoyer
+        dataset_name: Nom du dataset pour les logs
+    
+    Returns:
+        DataFrame nettoyé
+    """
+    if df is None or df.empty:
+        print(f"⚠️ DataFrame vide pour {dataset_name}")
+        return pd.DataFrame()
+    
+    print(f"📊 Nettoyage générique {dataset_name}: {len(df)} enregistrements initiaux, {len(df.columns)} colonnes")
+    
+    df_clean = df.copy()
+    
+    # 1. Détection automatique et normalisation des types
+    for col in df_clean.columns:
+        # Détecter les colonnes de dates (par nom ou contenu)
+        if any(keyword in col.lower() for keyword in ['date', 'time', 'timestamp', 'created', 'updated']):
+            try:
+                df_clean[col] = pd.to_datetime(df_clean[col], errors='coerce', infer_datetime_format=True)
+                # Supprimer les dates futures
+                today = pd.Timestamp.now()
+                df_clean = df_clean[df_clean[col] <= today]
+            except Exception as e:
+                print(f"⚠️ Impossible de convertir {col} en date: {e}")
+        
+        # Détecter les colonnes numériques
+        elif df_clean[col].dtype == 'object':
+            # Essayer de convertir en numérique si possible
+            try:
+                numeric_series = pd.to_numeric(df_clean[col], errors='coerce')
+                if numeric_series.notna().sum() > len(df_clean) * 0.8:  # Si >80% sont numériques
+                    df_clean[col] = numeric_series
+            except:
+                pass
+        
+        # Détecter les colonnes booléennes
+        elif df_clean[col].dtype == 'object':
+            unique_vals = df_clean[col].dropna().unique()
+            if len(unique_vals) <= 2:
+                # Potentiellement booléen
+                try:
+                    df_clean[col] = df_clean[col].astype('string')
+                except:
+                    pass
+    
+    # 2. Supprimer les doublons complets
+    initial_count = len(df_clean)
+    df_clean = df_clean.drop_duplicates()
+    removed_duplicates = initial_count - len(df_clean)
+    if removed_duplicates > 0:
+        print(f"⚠️ {removed_duplicates} doublon(s) complet(s) supprimé(s)")
+    
+    # 3. Gestion intelligente des valeurs nulles
+    for col in df_clean.columns:
+        null_count = df_clean[col].isna().sum()
+        null_pct = (null_count / len(df_clean)) * 100 if len(df_clean) > 0 else 0
+        
+        if null_pct > 50:
+            # Si >50% de nulls, on supprime la colonne (probablement inutile)
+            print(f"⚠️ Colonne {col} supprimée ({null_pct:.1f}% de valeurs nulles)")
+            df_clean = df_clean.drop(columns=[col])
+        elif null_pct > 0:
+            # Sinon, on remplit intelligemment
+            if df_clean[col].dtype in ['int64', 'float64']:
+                df_clean[col].fillna(df_clean[col].median(), inplace=True)
+            elif df_clean[col].dtype == 'datetime64[ns]':
+                df_clean[col].fillna(pd.Timestamp.now(), inplace=True)
+            else:
+                df_clean[col].fillna("UNKNOWN", inplace=True)
+    
+    # 4. Supprimer les lignes avec trop de valeurs nulles (>80%)
+    threshold = len(df_clean.columns) * 0.8
+    initial_count = len(df_clean)
+    df_clean = df_clean.dropna(thresh=threshold)
+    removed_rows = initial_count - len(df_clean)
+    if removed_rows > 0:
+        print(f"⚠️ {removed_rows} ligne(s) supprimée(s) (trop de valeurs nulles)")
+    
+    # 5. Nettoyage des colonnes texte (trim, lowercase pour emails potentiels)
+    for col in df_clean.columns:
+        if df_clean[col].dtype == 'string' or df_clean[col].dtype == 'object':
+            # Détecter les colonnes email
+            if 'email' in col.lower() or 'mail' in col.lower():
+                df_clean[col] = df_clean[col].str.lower().str.strip()
+                # Filtrer les emails invalides
+                df_clean = df_clean[df_clean[col].str.contains('@', na=False)]
+            else:
+                df_clean[col] = df_clean[col].astype(str).str.strip()
+    
+    # 6. Détection et nettoyage des valeurs aberrantes pour les colonnes numériques
+    numeric_cols = df_clean.select_dtypes(include=[np.number]).columns
+    for col in numeric_cols:
+        Q1 = df_clean[col].quantile(0.25)
+        Q3 = df_clean[col].quantile(0.75)
+        IQR = Q3 - Q1
+        if IQR > 0:
+            lower_bound = Q1 - 3 * IQR  # Plus tolérant que 1.5
+            upper_bound = Q3 + 3 * IQR
+            outliers = ((df_clean[col] < lower_bound) | (df_clean[col] > upper_bound)).sum()
+            if outliers > 0 and outliers < len(df_clean) * 0.1:  # Si <10% d'outliers
+                df_clean = df_clean[(df_clean[col] >= lower_bound) & (df_clean[col] <= upper_bound)]
+                print(f"⚠️ {outliers} valeur(s) aberrante(s) supprimée(s) dans {col}")
+    
+    print(f"✅ Nettoyage générique {dataset_name} terminé: {len(df_clean)} enregistrements valides")
+    
+    return df_clean
+
