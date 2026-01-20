@@ -1,0 +1,23 @@
+Amélioration de la pipeline:
+- La rendre plus robuste à l'ingestion de nouvelles données
+- Mettre en place du machine learning afin den extraire plus d'informations (a vous de voir)
+
+Big data authentique avec Spark:
+- Remplacer pandas par pyspark dans leur pipeline ELT existante
+- Ajouter un cluster Spark (1 master+ 2 workers via dockr composer)
+- Convertir leur transformations Pandas en transformations Spark
+- Calculer le temps de traitement des 2
+
+Base NoSQL opérationelle avec MongoDB
+- Piepileine qui lit Gold(parquet) et ecrit dans MongoDB
+- API Flask/FastAPI qui esxpose les data MongoDB et dashboard streamlit qui interroge l'api
+- Calculer le temps de refresh entre les deux
+- Bonus : Mise en place de metabase pour faire un dashboard
+
+Streaming temps réèlavec Kafka + Spark streaming
+- Producteur Kafka: Simule des évenements e-commerce (clics, achats , paniers abandonnés)
+- Spark Streaming: consomme Kafka, applique des transformations, détecte des anomalies
+
+Format de rendu
+1. email à nathan.vidal@ext.devinci.fr avec le lien du rpeo github du projet
+Projet en Zip dans un dépot sur DVL
